@@ -29,7 +29,11 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/ollama"
 cp "$BIN" "$APP/Contents/MacOS/PersonalAI"
 cp Resources/models.json "$APP/Contents/Resources/"
-cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+# Icon Composer icon: Assets.car for macOS 26 (system-shaped, no grey frame) + .icns for older macOS.
+rm -rf build/icon && mkdir -p build/icon
+xcrun actool Resources/AppIcon.icon --compile build/icon --platform macosx --minimum-deployment-target 14.0 \
+  --app-icon AppIcon --output-partial-info-plist build/icon/partial.plist >/dev/null
+cp build/icon/Assets.car build/icon/AppIcon.icns "$APP/Contents/Resources/"
 cp -R "$VENDOR/." "$APP/Contents/Resources/ollama/"
 
 # Apple silicon only: drop Intel-only libraries and thin universal binaries to arm64.
@@ -68,6 +72,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>PersonalAI</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconName</key><string>AppIcon</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
@@ -86,10 +91,8 @@ codesign --force --options runtime $TS --sign "$SIGN_IDENTITY" "$APP"
 echo "Built $APP ($(du -sh "$APP" | cut -f1))"
 
 if [ "${NOTARIZE:-0}" = 1 ]; then
-  DMG="build/PersonalAI.dmg"   # fixed name: the website links to releases/latest/download/PersonalAI.dmg
-  rm -rf build/dmg "$DMG"; mkdir -p build/dmg
-  cp -R "$APP" build/dmg/; ln -s /Applications build/dmg/Applications
-  hdiutil create -volname "Personal AI" -srcfolder build/dmg -ov -format UDZO "$DMG" >/dev/null
+  DMG="build/PersonalAI.dmg"
+  scripts/make-dmg.sh
   codesign --force $TS --sign "$SIGN_IDENTITY" "$DMG"
   xcrun notarytool submit "$DMG" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait
   xcrun stapler staple "$DMG"
