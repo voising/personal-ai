@@ -84,8 +84,14 @@ struct StatusMenu: View {
             Label("Ready. Apps that use Ollama can connect now.", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         case let .failed(message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 8) {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                HStack {
+                    Button("Try again") { runtime.retry() }
+                    Button("Show log") { NSWorkspace.shared.activateFileViewerSelecting([Log.url]) }
+                }
+            }
         }
     }
 

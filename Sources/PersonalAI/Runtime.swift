@@ -19,7 +19,9 @@ final class Runtime: ObservableObject {
     static let port = Int(ProcessInfo.processInfo.environment["PERSONALAI_PORT"] ?? "") ?? 11434
     static let base = URL(string: "http://127.0.0.1:\(port)")!
 
-    @Published private(set) var state: State = .starting
+    @Published private(set) var state: State = .starting {
+        didSet { Log.state(state, previous: oldValue) }
+    }
     @Published private(set) var model: CatalogModel?
     @Published private(set) var adoptedExternal = false
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -82,9 +84,11 @@ final class Runtime: ObservableObject {
             return
         }
         model = chosen
+        Log.write("Mac: \(hardware.chip), \(Int(hardware.ramGB)) GB RAM, \(Int(hardware.freeDiskGB)) GB free; model: \(chosen.id)")
 
         if await isServing() {
             adoptedExternal = true          // the user's own Ollama is already running: reuse it
+            Log.write("reusing the Ollama already running on port \(Self.port)")
         } else {
             do {
                 let binary = try await ollamaBinary(for: chosen)
@@ -101,7 +105,7 @@ final class Runtime: ObservableObject {
 
         do {
             if try await installedModels().contains(chosen.id) == false {
-                try await pull(chosen.id)
+                try await pullWithRetry(chosen.id)
             }
             state = .ready
         } catch {
@@ -143,8 +147,13 @@ final class Runtime: ObservableObject {
         env["OLLAMA_KEEP_ALIVE"] = "5m"
         env["OLLAMA_MAX_LOADED_MODELS"] = "1"
         p.environment = env
-        FileManager.default.createFile(atPath: AppPaths.log.path, contents: nil)
+        // Append across launches, so a failed first run is still there to read afterwards.
+        if !FileManager.default.fileExists(atPath: AppPaths.log.path) {
+            FileManager.default.createFile(atPath: AppPaths.log.path, contents: nil)
+        }
         let log = try FileHandle(forWritingTo: AppPaths.log)
+        log.seekToEndOfFile()
+        log.write(Data("\n=== Personal AI \(Log.version) starting \(binary.path) at \(Date()) ===\n".utf8))
         p.standardOutput = log
         p.standardError = log
         p.terminationHandler = { [weak self] proc in
@@ -179,6 +188,27 @@ final class Runtime: ObservableObject {
     private func installedModels() async throws -> Set<String> {
         let (data, _) = try await URLSession.shared.data(from: Self.base.appendingPathComponent("api/tags"))
         return Set(try JSONDecoder().decode(Tags.self, from: data).models.map(\.name))
+    }
+
+    /// Model downloads are several GB over flaky Wi-Fi. Ollama keeps finished parts, so each
+    /// retry resumes where the last one stopped.
+    private func pullWithRetry(_ id: String, attempts: Int = 5) async throws {
+        for attempt in 1...attempts {
+            do { return try await pull(id) } catch {
+                Log.write("download attempt \(attempt) failed: \(error.localizedDescription)")
+                guard attempt < attempts else { throw error }
+                let wait = 10 * attempt
+                state = .downloading(status: "Connection lost. Retrying in \(wait) s", fraction: nil)
+                try await Task.sleep(for: .seconds(wait))
+            }
+        }
+    }
+
+    /// Menu "Try again" after a failure.
+    func retry() {
+        if let process, process.isRunning { process.terminate() }
+        process = nil
+        Task { await boot() }
     }
 
     private struct PullLine: Decodable { let status: String?; let total: Int64?; let completed: Int64?; let error: String? }
