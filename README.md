@@ -13,7 +13,7 @@ Ollama or the OpenAI API connects to it with no setup, and nothing you type leav
 
 ## Download
 
-Get the latest `PersonalAI-<version>.dmg` from the
+Get the latest `PersonalAI.dmg` from the
 [Releases page](../../releases/latest), open it and drag **Personal AI** to Applications.
 The app is signed with a Developer ID and notarized by Apple, so it opens without a warning.
 
@@ -62,7 +62,7 @@ scripts/build-app.sh          # ad-hoc signed, for local testing only
 git tag v0.1.0
 export ASC_KEY_ID=… ASC_ISSUER_ID=… ASC_KEY_PATH=…/AuthKey_….p8
 SIGN_IDENTITY="Developer ID Application: RailsSquad OU (VLZY44ZX2X)" NOTARIZE=1 scripts/build-app.sh
-gh release create v0.1.0 build/PersonalAI-0.1.0.dmg --title "Personal AI 0.1.0" --notes "…"
+gh release create v0.1.0 build/PersonalAI.dmg --title "Personal AI 0.1.0" --notes "…"
 ```
 
 The version comes from the latest git tag. The App Store isn't an option because the app

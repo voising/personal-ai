@@ -2,7 +2,7 @@
 # Builds build/Personal AI.app with Ollama bundled inside.
 #   OLLAMA_VERSION  Ollama release to bundle (default below)
 #   SIGN_IDENTITY   "Developer ID Application: …" for distribution; ad-hoc ("-") otherwise
-#   NOTARIZE=1      also notarize + staple and build build/PersonalAI-<version>.dmg
+#   NOTARIZE=1      also notarize + staple and build build/PersonalAI.dmg
 #                   (uses ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_PATH)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -56,7 +56,7 @@ codesign --force --options runtime $TS --sign "$SIGN_IDENTITY" "$APP"
 echo "Built $APP ($(du -sh "$APP" | cut -f1))"
 
 if [ "${NOTARIZE:-0}" = 1 ]; then
-  DMG="build/PersonalAI-$VERSION.dmg"
+  DMG="build/PersonalAI.dmg"   # fixed name: the website links to releases/latest/download/PersonalAI.dmg
   rm -rf build/dmg "$DMG"; mkdir -p build/dmg
   cp -R "$APP" build/dmg/; ln -s /Applications build/dmg/Applications
   hdiutil create -volname "Personal AI" -srcfolder build/dmg -ov -format UDZO "$DMG" >/dev/null
