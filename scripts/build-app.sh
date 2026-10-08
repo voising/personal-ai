@@ -9,7 +9,8 @@ cd "$(dirname "$0")/.."
 
 OLLAMA_VERSION="${OLLAMA_VERSION:-v0.40.0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
-VERSION="$(git describe --tags --abbrev=0 2>/dev/null | sed s/^v// || true)"; VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed s/^v// || true)}"; VERSION="${VERSION:-0.1.0}"
+REPO="voising/personal-ai"
 TS="--timestamp"; [ "$SIGN_IDENTITY" = "-" ] && TS="--timestamp=none"
 APP="build/Personal AI.app"
 VENDOR="vendor/ollama-$OLLAMA_VERSION"
@@ -21,8 +22,8 @@ if [ ! -x "$VENDOR/ollama" ]; then
     | tar xz -C "$VENDOR"
 fi
 
-swift build -c release --arch arm64 --arch x86_64
-BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/PersonalAI"
+swift build -c release --arch arm64
+BIN="$(swift build -c release --arch arm64 --show-bin-path)/PersonalAI"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/ollama"
@@ -30,7 +31,32 @@ cp "$BIN" "$APP/Contents/MacOS/PersonalAI"
 cp Resources/models.json "$APP/Contents/Resources/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 cp -R "$VENDOR/." "$APP/Contents/Resources/ollama/"
-# x86 CPU backends are only loaded on Intel Macs; keep them, they are small.
+
+# Apple silicon only: drop Intel-only libraries and thin universal binaries to arm64.
+find "$APP/Contents/Resources/ollama" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.so' \) -print0 |
+while IFS= read -r -d '' F; do
+  case "$(lipo -archs "$F" 2>/dev/null)" in
+    x86_64) rm "$F" ;;
+    *x86_64*arm64*|*arm64*x86_64*) lipo -thin arm64 "$F" -output "$F.arm64" && mv "$F.arm64" "$F" ;;
+  esac
+done
+find "$APP/Contents/Resources/ollama" -type l ! -exec test -e {} \; -delete   # symlinks to removed Intel libs
+
+# The MLX engine (~200 MB per Metal version) is not shipped in the app. Each build becomes a
+# release asset that the app downloads only when its model needs MLX (see MLXRuntime.swift).
+rm -rf build/mlx && mkdir -p build/mlx
+MANIFEST="{\"ollama\": \"$OLLAMA_VERSION\", \"variants\": {"
+SEP=""
+for V in mlx_metal_v3 mlx_metal_v4; do
+  mv "$APP/Contents/Resources/ollama/$V" "build/mlx/$V"
+  find "build/mlx/$V" -type f \( -name '*.dylib' -o -perm -u+x \) -print0 \
+    | xargs -0 codesign --force --options runtime $TS --sign "$SIGN_IDENTITY"
+  (cd build/mlx && ditto -c -k --keepParent "$V" "$V.zip")
+  SHA=$(shasum -a 256 "build/mlx/$V.zip" | cut -d' ' -f1)
+  MANIFEST="$MANIFEST$SEP\"$V\": {\"url\": \"https://github.com/$REPO/releases/download/v$VERSION/$V.zip\", \"sha256\": \"$SHA\"}"
+  SEP=", "
+done
+echo "$MANIFEST}}" > "$APP/Contents/Resources/mlx.json"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -45,6 +71,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>LSArchitecturePriority</key><array><string>arm64</string></array>
+  <key>LSRequiresNativeExecution</key><true/>
   <key>LSUIElement</key><true/>
   <key>NSHumanReadableCopyright</key><string>Open source. Ollama is MIT licensed.</string>
 </dict></plist>
@@ -67,4 +95,5 @@ if [ "${NOTARIZE:-0}" = 1 ]; then
   xcrun stapler staple "$DMG"
   spctl -a -t open --context context:primary-signature -v "$DMG"
   shasum -a 256 "$DMG"
+  echo "Release assets: $DMG build/mlx/mlx_metal_v3.zip build/mlx/mlx_metal_v4.zip"
 fi

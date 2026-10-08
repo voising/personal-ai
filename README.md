@@ -22,7 +22,7 @@ On first launch a brain icon appears in the menu bar and the model starts downlo
 (or `http://127.0.0.1:11434/v1` for apps that expect the OpenAI API).
 Turn on **Open at login** in the menu so it is there after a restart.
 
-Requires macOS 14 or later. Apple Silicon is recommended; Intel Macs get a small model on the CPU.
+Requires a Mac with Apple silicon (M1 or later) and macOS 14 or later. Intel Macs are not supported.
 
 ## How it behaves
 
@@ -30,6 +30,9 @@ Requires macOS 14 or later. Apple Silicon is recommended; Intel Macs get a small
 - Ollama loads the model on the first request and unloads it after 5 min idle, so RAM is only used while you write.
 - When macOS reports memory pressure (warning or critical), the app unloads the model immediately.
 - If the user already runs Ollama on 11434, the app reuses it instead of starting a second one.
+- The app is about 55 MB. Ollama's MLX engine is not bundled: when the chosen model runs on MLX,
+  the app downloads the one build that Mac needs (74 MB on macOS 26, 52 MB before) from the
+  GitHub release, checks its SHA-256 and runs Ollama from `~/Library/Application Support/PersonalAI/runtime`.
 - Models live in `~/Library/Application Support/PersonalAI/models`.
 - A `models.json` dropped in that folder overrides the bundled list.
 
@@ -62,10 +65,12 @@ scripts/build-app.sh          # ad-hoc signed, for local testing only
 git tag v0.1.0
 export ASC_KEY_ID=… ASC_ISSUER_ID=… ASC_KEY_PATH=…/AuthKey_….p8
 SIGN_IDENTITY="Developer ID Application: RailsSquad OU (VLZY44ZX2X)" NOTARIZE=1 scripts/build-app.sh
-gh release create v0.1.0 build/PersonalAI.dmg --title "Personal AI 0.1.0" --notes "…"
+gh release create v0.1.0 build/PersonalAI.dmg build/mlx/mlx_metal_v3.zip build/mlx/mlx_metal_v4.zip \
+  --title "Personal AI 0.1.0" --notes "…"
 ```
 
-The version comes from the latest git tag. The App Store isn't an option because the app
+The version comes from the latest git tag (or `VERSION=`). The MLX zips must be attached to the
+same release, because the app downloads them from that tag's URLs. The App Store isn't an option because the app
 runs a bundled server binary.
 
 ## License

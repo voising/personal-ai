@@ -15,7 +15,8 @@ final class Runtime: ObservableObject {
         case failed(String)
     }
 
-    static let port = 11434
+    /// 11434 is Ollama's standard port, which apps look for. PERSONALAI_PORT overrides it for testing.
+    static let port = Int(ProcessInfo.processInfo.environment["PERSONALAI_PORT"] ?? "") ?? 11434
     static let base = URL(string: "http://127.0.0.1:\(port)")!
 
     @Published private(set) var state: State = .starting
@@ -85,7 +86,10 @@ final class Runtime: ObservableObject {
         if await isServing() {
             adoptedExternal = true          // the user's own Ollama is already running: reuse it
         } else {
-            do { try launchServer() } catch {
+            do {
+                let binary = try await ollamaBinary(for: chosen)
+                try launchServer(binary)
+            } catch {
                 state = .failed("Could not start Ollama: \(error.localizedDescription)")
                 return
             }
@@ -105,7 +109,21 @@ final class Runtime: ObservableObject {
         }
     }
 
-    private func ollamaBinary() -> URL? {
+    /// The bundled Ollama, run from a runtime folder with the MLX engine when the model needs it.
+    private func ollamaBinary(for model: CatalogModel) async throws -> URL {
+        if model.needsMLX, let bundleDir = Bundle.main.resourceURL?.appendingPathComponent("ollama"),
+           FileManager.default.fileExists(atPath: bundleDir.appendingPathComponent("ollama").path) {
+            return try await MLXRuntime.prepare(bundleDir: bundleDir) { [weak self] fraction in
+                self?.state = .downloading(status: "Downloading the MLX engine (about 200 MB)", fraction: fraction)
+            }
+        }
+        guard let binary = fallbackBinary() else {
+            throw NSError(domain: "PersonalAI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Ollama binary is missing from the app."])
+        }
+        return binary
+    }
+
+    private func fallbackBinary() -> URL? {
         let candidates = [
             Bundle.main.resourceURL?.appendingPathComponent("ollama/ollama"),
             URL(fileURLWithPath: "/opt/homebrew/bin/ollama"),
@@ -115,10 +133,7 @@ final class Runtime: ObservableObject {
         return candidates.compactMap { $0 }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
     }
 
-    private func launchServer() throws {
-        guard let binary = ollamaBinary() else {
-            throw NSError(domain: "PersonalAI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Ollama binary is missing from the app."])
-        }
+    private func launchServer(_ binary: URL) throws {
         let p = Process()
         p.executableURL = binary
         p.arguments = ["serve"]

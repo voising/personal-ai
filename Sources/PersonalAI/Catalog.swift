@@ -8,6 +8,9 @@ struct CatalogModel: Codable, Identifiable {
     let appleSiliconOnly: Bool
     let rank: Int           // higher is better quality
     let tested: Bool        // benchmarked with scripts/bench.sh
+    let engine: String?     // "mlx" needs the MLX runtime, downloaded on demand; nil = llama.cpp
+
+    var needsMLX: Bool { engine == "mlx" }
 }
 
 struct Catalog: Codable {
@@ -24,7 +27,7 @@ struct Catalog: Codable {
         }
         return Catalog(version: 0, models: [
             CatalogModel(id: "gemma3:1b", name: "Gemma 3 1B", sizeGB: 0.8, minRAMGB: 4,
-                         appleSiliconOnly: false, rank: 10, tested: false)
+                         appleSiliconOnly: false, rank: 10, tested: false, engine: nil)
         ])
     }
 
@@ -45,4 +48,5 @@ enum AppPaths {
     }()
     static let models = support.appendingPathComponent("models", isDirectory: true)
     static let log = support.appendingPathComponent("ollama.log")
+    static let runtime = support.appendingPathComponent("runtime", isDirectory: true)
 }

@@ -8,7 +8,8 @@
       "minRAMGB": 32,
       "appleSiliconOnly": true,
       "rank": 50,
-      "tested": true
+      "tested": true,
+      "engine": "mlx"
     },
     {
       "id": "qwen3:30b-a3b",
