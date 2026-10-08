@@ -67,3 +67,7 @@ gh release create v0.1.0 build/PersonalAI.dmg --title "Personal AI 0.1.0" --note
 
 The version comes from the latest git tag. The App Store isn't an option because the app
 runs a bundled server binary.
+
+## License
+
+MIT. See [LICENSE](LICENSE). The bundled Ollama is also MIT licensed.

@@ -28,6 +28,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/ollama"
 cp "$BIN" "$APP/Contents/MacOS/PersonalAI"
 cp Resources/models.json "$APP/Contents/Resources/"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 cp -R "$VENDOR/." "$APP/Contents/Resources/ollama/"
 # x86 CPU backends are only loaded on Intel Macs; keep them, they are small.
 
@@ -40,6 +41,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>Personal AI</string>
   <key>CFBundleExecutable</key><string>PersonalAI</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
